@@ -16,6 +16,17 @@ function take($code, &$pos, $n=1) {
     return $s;
 }
 
+function takeToken($code, &$pos) {
+    // lexer in one regex
+    if($t=takeRegex(
+        '^(([{}\[\]()<>"\'+\-*\/\%=$.,;])|(for|function|return|if|else)|(\d+)|(\w+))',
+        $code,
+        $pos
+    )) return $t;
+
+    return false;
+}
+
 function takeSurrounded($open, $code, &$pos) {
     $close = match ($open) {
         '[' => ']',
