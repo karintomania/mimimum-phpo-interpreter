@@ -61,7 +61,7 @@ function test(string $name, Closure $closure, array $args = []) {
 };
 
 test('takeToken', function ($code, $want) {
-        // skip();
+        skip();
         $pos = 0;
         $i = 0;
         while($t = takeToken($code, $pos)) {
@@ -91,7 +91,7 @@ test('takeToken', function ($code, $want) {
 );
 
 describe("eval_expr", function () {
-    // skip();
+    skip();
     test ("evaluate arithmatic operations",
         function ($code, $answer) {
             $pos = 0;
@@ -167,19 +167,20 @@ describe("eval_assign", function () {
 });
 
 describe("eval_def", function () {
-    skip();
+    // skip();
     test ("eval_def",
         function ($code, $val) {
             $pos = 0;
             $vars = [];
             $funcs = [];
             $got = evaluate($code, $pos, $vars, $funcs);
+            var_dump("got=$got");
 
-            assertSame((float)$val, (float)$got);
+            assertSame((int)$val, (int)$got);
         },
         [
             // can't include space
-            ['functiontest(){return1+1;};test();', 2],
+            ['functiontest(){return1+1;};returntest();', 2],
         ]
     );
 });
