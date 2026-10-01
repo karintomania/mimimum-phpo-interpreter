@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/interpreter.php';
 
+class SkipTestException extends Exception {};
+
+function skip() { throw new SkipTestException(); }
+
 function assertSame ($wants, $got) {
     if ($wants !== $got) throw new Exception("Expected $wants, got $got");
 }
@@ -13,7 +17,11 @@ function assertTrue ($got) {
 
 function describe(string $desc, Closure $tests): void {
     print("-----$desc -----\n");
-    $tests();
+    try {
+        $tests();
+    } catch (SkipTestException){
+        printf("Skip test: %s\n", $desc);
+    }
 }
 
 function test(string $name, Closure $closure, array $args = []) {
@@ -21,6 +29,8 @@ function test(string $name, Closure $closure, array $args = []) {
         try {
             $closure();
             print("✅: $name\n");
+        } catch (SkipTestException $e){
+            printf("Skip test: %s\n", $name);
         } catch (Exception $e){
             printf(
                 "❌: %s: %s\n%s",
@@ -36,6 +46,8 @@ function test(string $name, Closure $closure, array $args = []) {
         try {
             $closure(...$arg);
             print("✅: $name [$key]\n");
+        } catch (SkipTestException $e){
+            printf("Skip test: %s, %s\n", $key, $name);
         } catch (Exception $e){
             printf(
                 "❌: %s [%s]: %s\n%s",
@@ -48,12 +60,44 @@ function test(string $name, Closure $closure, array $args = []) {
     }
 };
 
+test('takeToken', function ($code, $want) {
+        // skip();
+        $pos = 0;
+        $i = 0;
+        while($t = takeToken($code, $pos)) {
+            assertSame($want[$i++], $t);
+        }
+        assertSame(count($want), $i);
+    },
+    [
+        'single char tokens' => [
+            '{}[]()<>"\'+-*/%=$,.;',
+            explode('|', '{|}|[|]|(|)|<|>|"|\'|+|-|*|/|%|=|$|,|.|;'),
+        ],
+        'keywords' => [
+            'forfunctionreturnifelse',
+            explode(',', 'for,function,return,if,else'),
+        ],
+        'numbers' => [
+            '123;',
+            ['123', ';'],
+        ],
+        // var or function name
+        'words' => [
+            'test;funcName;snake_case',
+            ['test', ';', 'funcName', ';', 'snake_case'],
+        ],
+    ]
+);
+
 describe("eval_expr", function () {
+    // skip();
     test ("evaluate arithmatic operations",
         function ($code, $answer) {
             $pos = 0;
             $vars = [];
-            $result = eval_expr($code, $pos, $vars);
+            $funcs = [];
+            $result = eval_expr($code, $pos, $vars, $funcs);
 
             assertSame((float)$answer, (float)$result);
         },
@@ -74,7 +118,8 @@ describe("eval_expr", function () {
         function ($code, $answer) {
             $pos = 0;
             $vars = [];
-            $result = eval_expr($code, $pos, $vars);
+            $funcs = [];
+            $result = eval_expr($code, $pos, $vars, $funcs);
 
             assertSame((float)$answer, (float)$result);
         },
@@ -90,7 +135,8 @@ describe("eval_assign", function () {
         function ($code, $name, $val) {
             $pos = 0;
             $vars = [];
-            evaluate($code, $pos, $vars);
+            $funcs = [];
+            evaluate($code, $pos, $vars, $funcs);
 
             assertSame((float)$val, (float)$vars[$name]);
         },
@@ -101,11 +147,13 @@ describe("eval_assign", function () {
             ['$ary=[];', 'ary', []],
         ]
     );
+
     test ("assign array",
         function ($code, $ary, $key, $val) {
             $pos = 0;
             $vars = [];
-            evaluate($code, $pos, $vars);
+            $funcs = [];
+            evaluate($code, $pos, $vars, $funcs);
 
             assertSame((float)$val, (float)$vars[$ary][$key]);
         },
@@ -114,6 +162,24 @@ describe("eval_assign", function () {
             ['$a=[1,2,3];', 'a', '1', 2],
             ['$a=[\'test\'=>1,\'test2\'=>\'value\'];', 'a', 'test2', 'value'],
             ['$a=[1,2,3];$a[1]=0;', 'a', '1', 0],
+        ]
+    );
+});
+
+describe("eval_def", function () {
+    skip();
+    test ("eval_def",
+        function ($code, $val) {
+            $pos = 0;
+            $vars = [];
+            $funcs = [];
+            $got = evaluate($code, $pos, $vars, $funcs);
+
+            assertSame((float)$val, (float)$got);
+        },
+        [
+            // can't include space
+            ['functiontest(){return1+1;};test();', 2],
         ]
     );
 });

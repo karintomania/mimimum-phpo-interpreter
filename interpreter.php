@@ -18,14 +18,19 @@ function take($code, &$pos, $n=1) {
 
 function takeToken($code, &$pos) {
     // lexer in one regex
-    if($t=takeRegex(
-        '^(([{}\[\]()<>"\'+\-*\/\%=$.,;])|(for|function|return|if|else)|(\d+)|(\w+))',
-        $code,
-        $pos
-    )) return $t;
-
-    return false;
+    while($pos < strlen($code)) {
+        if ($t=takeRegex(
+            '^(([{}\[\]()<>"\'+\-*\/\%=$.,;])|(for|function|return|if|else)|(\d+)|(\w+))',
+            $code,
+            $pos
+        )) return $t;
+        $pos++;
+    }
 }
+function seekToken($code, $pos) {
+    return takeToken($code, $pos);
+}
+
 
 function takeSurrounded($open, $code, &$pos) {
     $close = match ($open) {
@@ -45,19 +50,19 @@ function takeSurrounded($open, $code, &$pos) {
 }
 
 
-function eval_expr($code, &$pos, &$vars) {
-    return eval_t2($code, $pos, $vars);
+function eval_expr($code, &$pos, &$vars, &$funcs) {
+    return eval_t2($code, $pos, $vars, $funcs);
 };
 
-function eval_t2($code, &$pos, &$vars){
-    $l = eval_t1($code, $pos, $vars);
+function eval_t2($code, &$pos, &$vars, &$funcs){
+    $l = eval_t1($code, $pos, $vars, $funcs);
 
-    while ($c = take($code, $pos)) {
+    while ($c = takeToken($code, $pos)) {
         if ($c == '+') {
-            $r = eval_t1($code, $pos, $vars);
+            $r = eval_t1($code, $pos, $vars, $funcs);
              $l += $r;
         } else if ($c == '-') {
-            $r = eval_t1($code, $pos, $vars);
+            $r = eval_t1($code, $pos, $vars, $funcs);
              $l -= $r;
         } else {
             $pos--;
@@ -67,18 +72,18 @@ function eval_t2($code, &$pos, &$vars){
     return $l;
 };
 
-function eval_t1($code, &$pos, $vars){
-    $l = eval_atom($code, $pos, $vars);
+function eval_t1($code, &$pos, $vars, &$funcs){
+    $l = eval_atom($code, $pos, $vars, $funcs);
 
-    while ($c = take($code, $pos)) {
+    while ($c = takeToken($code, $pos)) {
         if ($c == '*') {
-            $r = eval_atom($code, $pos, $vars);
+            $r = eval_atom($code, $pos, $vars, $funcs);
             $l *= $r;
         } else if ($c == '/'){
-            $r = eval_atom($code, $pos, $vars);
+            $r = eval_atom($code, $pos, $vars, $funcs);
             $l /= $r;
         } else if ($c == '%'){
-            $r = eval_atom($code, $pos, $vars);
+            $r = eval_atom($code, $pos, $vars, $funcs);
             $l %= $r;
         } else {
             $pos--;
@@ -88,7 +93,7 @@ function eval_t1($code, &$pos, $vars){
     return $l;
 };
 
-function eval_ary($code, &$pos, &$vars) {
+function eval_ary($code, &$pos, &$vars, &$funcs) {
     if (str_starts_with($code,"[]")) {
         $pos += 2;
         return [];
@@ -107,20 +112,20 @@ function eval_ary($code, &$pos, &$vars) {
             [$keyRaw, $valueRaw]=explode('=>', $elm);
 
             $ePos = 0;
-            $key=eval_expr($keyRaw, $ePos, $vars);
+            $key=eval_expr($keyRaw, $ePos, $vars, $funcs);
             $ePos = 0;
-            $value=eval_expr($valueRaw, $ePos, $vars);
+            $value=eval_expr($valueRaw, $ePos, $vars, $funcs);
             $result[$key] = $value;
         } else {
             $ePos=0;
-            $result[]=eval_expr($elm, $ePos, $vars);
+            $result[]=eval_expr($elm, $ePos, $vars, $funcs);
         }
     }
 
     return $result;
 }
 
-function eval_atom($code, &$pos, &$vars) {
+function eval_atom($code, &$pos, &$vars, &$funcs) {
     $c = $code[$pos];
 
     if ($c == '\'' || $c == '"') {
@@ -132,12 +137,12 @@ function eval_atom($code, &$pos, &$vars) {
     if ($c == '(') {
         $expr = takeSurrounded('(', $code, $pos);
         $exprPos = 0;
-        $result = eval_expr($expr, $exprPos, $vars);
+        $result = eval_expr($expr, $exprPos, $vars, $funcs);
         return $result;
     }
 
     if ($c=='[') {
-        return eval_ary($code, $pos, $vars);
+        return eval_ary($code, $pos, $vars, $funcs);
     }
 
     if ($c=='$') {
@@ -149,45 +154,78 @@ function eval_atom($code, &$pos, &$vars) {
     return takeRegex('(\d+)', $code, $pos);
 }
 
-function eval_assign($code, &$pos, &$vars) {
+function eval_assign($code, &$pos, &$vars, &$funcs) {
+    $name = takeToken($code, $pos);
+    $t = seekToken($code, $pos);
+
     // assign array
-    if($ary = takeRegex('(.+?)\[.*?\]=', $code, $pos)) {
-        $key = takeRegex('\[(.*?)\]=', $code, $pos);
+    if($t == '[') {
+        $key = takeSurrounded('[', $code, $pos);
         $valExpr = takeRegex('=(.+?;)', $code, $pos);
         $exprPos = 0;
-        if (isset($vars[$ary])) {
-            $vars[$ary][$key] = eval_expr($valExpr, $exprPos, $vars);
+        if (isset($vars[$name])) {
+            $vars[$name][$key] = eval_expr($valExpr, $exprPos, $vars, $funcs);
         } else {
-            $vars[$ary] = [];
-            $vars[$ary][$key] = eval_expr($valExpr, $exprPos, $vars);
+            $vars[$name] = [];
+            $vars[$name][$key] = eval_expr($valExpr, $exprPos, $vars, $funcs);
         }
         return;
     };
-    $name = takeRegex('(.+?)=', $code, $pos);
     $valExpr = takeRegex('=(.+?;)', $code, $pos);
     $exprPos = 0;
-    $vars[$name] = eval_expr($valExpr, $exprPos, $vars);
+    $vars[$name] = eval_expr($valExpr, $exprPos, $vars, $funcs);
 }
 
-function eval_def($code, &$pos, &$vars) {
+function eval_def($code, &$pos, &$vars, &$funcs) {
+    $name = takeRegex('(.+?)\(', $code, $pos);
+    $argsRaw = takeSurrounded('(', $code, $pos);
+    $args = $argsRaw ? explode(',', $argsRaw) : [];
+    $body = takeSurrounded('{', $code, $pos);
+
+    $funcs[$name] = [$args, $body];
+
+    var_dump($name, $funcs, 'l'.__LINE__);
 }
 
-function eval_call($code, &$pos, &$vars) {
+function eval_call($f, $code, &$pos, &$vars, &$funcs) {
+    var_dump('eval_call', substr($code, $pos), 'l'.__LINE__);
+    $argsRaw = explode(',', takeSurrounded('(', $code, $pos));
+    $localVars = [];
+    foreach($argsRaw as $i => $a) {;
+        $aPos = 0;
+        $localVar[$f[0][$i]] = eval_expr($a, $aPos, $vars, $funcs);
+    }
+    $localPos = 0;
+    var_dump($f[1], $localVars, __LINE__);
+    return evaluate($f[1], $localPos, $localVars, $funcs);
 }
 
-function evaluate($code, &$pos, &$vars) {
-    while($c = take($code, $pos)) {
+function evaluate($code, &$pos, &$vars, &$funcs) {
+    while($t = takeToken($code, $pos)) {
         // assign
-        if ($c == '$') {
-            $stmt = takeRegex('^(.+?;)', $code, $pos);
-            $tPos = 0;
-            eval_assign($stmt, $tPos, $vars);
+        if ($t == '$') {
+            eval_assign($code, $pos, $vars, $funcs);
             continue;
          }
         // fun
-        if ($c == 'f' && str_starts_with($code,'unction')) {
-            $pos+=7&&eval_def($code, $pos, $vars);
+        if ($t == 'function') {
+            eval_def($code, $pos, $vars, $funcs);
+            continue;
         }
-        $pos++;
+
+        if (array_key_exists($t, $funcs)) {
+            print($t);
+            print($pos);
+            eval_call($funcs[$t], $code, $pos, $vars, $funcs);
+        } else if ($t == 'return') {
+            $exp = takeRegex('(.+?;)', $code, $pos);
+            $expPos  = 0;
+            return eval_expr($exp, $expPos, $vars, $funcs);
+        } else if ($t == 'if') {
+            var_dump('if');
+        } else if ($t == 'for') {
+            var_dump('for');
+        }
+        // ignore unknown keyword
     }
 }
