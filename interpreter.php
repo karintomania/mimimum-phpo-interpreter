@@ -64,6 +64,9 @@ function eval_t2($code, &$pos, &$vars, &$funcs){
         } else if ($c == '-') {
             $r = eval_t1($code, $pos, $vars, $funcs);
              $l -= $r;
+        } else if ($c == '.') {
+            $r = eval_t1($code, $pos, $vars, $funcs);
+             $l .= $r;
         } else {
             $pos--;
             return $l;
@@ -126,16 +129,16 @@ function eval_ary($code, &$pos, &$vars, &$funcs) {
 }
 
 function eval_call($f, $code, &$pos, &$vars, &$funcs) {
-    var_dump('eval_call', substr($code, $pos), 'l'.__LINE__);
-    $argsRaw = explode(',', takeSurrounded('(', $code, $pos));
-    var_dump('eval_call', $argsRaw, 'l'.__LINE__);
+    $argStr = takeSurrounded('(', $code, $pos);
     $localVars = [];
-    foreach($argsRaw as $i => $a) {;
-        $aPos = 0;
-        $localVar[$f[0][$i]] = eval_expr($a, $aPos, $vars, $funcs);
+    if ($argStr!="") {
+        $argsRaw = explode(',', $argStr);
+        foreach($argsRaw as $i => $a) {;
+            $aPos = 0;
+            $localVars[$f[0][$i]] = eval_expr($a, $aPos, $vars, $funcs);
+        }
     }
     $localPos = 0;
-    var_dump($f[1], $localVars, __LINE__);
     return evaluate($f[1], $localPos, $localVars, $funcs);
 }
 
@@ -199,12 +202,13 @@ function eval_assign($code, &$pos, &$vars, &$funcs) {
 function eval_def($code, &$pos, &$vars, &$funcs) {
     $name = takeRegex('(.+?)\(', $code, $pos);
     $argsRaw = takeSurrounded('(', $code, $pos);
-    $args = $argsRaw ? explode(',', $argsRaw) : [];
+    $args = $argsRaw
+        // remove dollar signs
+        ? array_map(fn ($s)=> substr($s, 1), explode(',', $argsRaw))
+        : [];
     $body = takeSurrounded('{', $code, $pos);
 
     $funcs[$name] = [$args, $body];
-
-    var_dump($name, $funcs, 'l'.__LINE__);
 }
 
 function evaluate($code, &$pos, &$vars, &$funcs) {
@@ -224,7 +228,6 @@ function evaluate($code, &$pos, &$vars, &$funcs) {
             eval_call($funcs[$t], $code, $pos, $vars, $funcs);
         } else if ($t == 'return') {
             $exp = takeRegex('(.+?;)', $code, $pos);
-            var_dump("return!!$exp", 'l'.__LINE__);
             $expPos  = 0;
             return eval_expr($exp, $expPos, $vars, $funcs);
         } else if ($t == 'if') {

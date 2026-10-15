@@ -61,7 +61,7 @@ function test(string $name, Closure $closure, array $args = []) {
 };
 
 test('takeToken', function ($code, $want) {
-        skip();
+        // skip();
         $pos = 0;
         $i = 0;
         while($t = takeToken($code, $pos)) {
@@ -91,7 +91,7 @@ test('takeToken', function ($code, $want) {
 );
 
 describe("eval_expr", function () {
-    skip();
+    // skip();
     test ("evaluate arithmatic operations",
         function ($code, $answer) {
             $pos = 0;
@@ -126,6 +126,7 @@ describe("eval_expr", function () {
         [
             ["'single quote'", 'single quote'],
             ['"double quote"', 'double quote'],
+            ['"concat"." string"', 'concat string'],
         ],
     );
 });
@@ -174,13 +175,15 @@ describe("eval_def", function () {
             $vars = [];
             $funcs = [];
             $got = evaluate($code, $pos, $vars, $funcs);
-            var_dump("got=$got");
 
             assertSame((int)$val, (int)$got);
         },
         [
             // can't include space
-            ['functiontest(){return1+1;};returntest();', 2],
+            ['functiontest(){return1+1;}returntest();', 2],
+            ['functionplus($a,$b){return$a+$b;}returnplus(3,4);', 7],
+            // multiple statements function
+            ['functiona($a,$b){$c=$a+$b;return$c*2;}returna(3,4);', 14],
         ]
     );
 });
