@@ -70,13 +70,13 @@ test('takeToken', function ($code, $want) {
         assertSame(count($want), $i);
     },
     [
-        'single char tokens' => [
-            '{}[]()<>"\'+-*/%=$,.;',
-            explode('|', '{|}|[|]|(|)|<|>|"|\'|+|-|*|/|%|=|$|,|.|;'),
+        'symbol tokens' => [
+            '{}[]()<>"\'+-*/%=$,.;!=',
+            explode('|', '{|}|[|]|(|)|<|>|"|\'|+|-|*|/|%|=|$|,|.|;|!='),
         ],
         'keywords' => [
-            'forfunctionreturnifelse',
-            explode(',', 'for,function,return,if,else'),
+            'forfunctionreturnifelsetruefalse',
+            explode(',', 'for,function,return,if,else,true,false'),
         ],
         'numbers' => [
             '123;',
@@ -127,6 +127,29 @@ describe("eval_expr", function () {
             ["'single quote'", 'single quote'],
             ['"double quote"', 'double quote'],
             ['"concat"." string"', 'concat string'],
+        ],
+    );
+
+    test ("evaluate bool",
+        function ($code, $answer) {
+            $pos = 0;
+            $vars = [];
+            $funcs = [];
+            $result = eval_expr($code, $pos, $vars, $funcs);
+
+            assertSame((float)$answer, (float)$result);
+        },
+        [
+            ["true;", true],
+            ["false;", false],
+            ["1>0;", true],
+            ["5>9;", false],
+            ["5<9;", true],
+            ["9-8<0;", false],
+            ["5<=5;", true],
+            ["5>=5;", true],
+            ["5-4==1*1;", true],
+            ["true!=false;", true],
         ],
     );
 });
@@ -184,6 +207,26 @@ describe("eval_def", function () {
             ['functionplus($a,$b){return$a+$b;}returnplus(3,4);', 7],
             // multiple statements function
             ['functiona($a,$b){$c=$a+$b;return$c*2;}returna(3,4);', 14],
+        ]
+    );
+});
+
+describe("eval_if", function () {
+    // skip();
+    test ("eval_if",
+        function ($code, $val) {
+            $pos = 0;
+            $vars = [];
+            $funcs = [];
+            $got = evaluate($code, $pos, $vars, $funcs);
+
+            assertSame((int)$val, (int)$got);
+        },
+        [
+            // can't include space
+            ['return3;', 3],
+            ['if(0){return2;}else{return3;}', 3],
+            ['if(0){return;}elseif(1){return1;}else{return;}', 1],
         ]
     );
 });

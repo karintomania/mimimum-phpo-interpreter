@@ -20,7 +20,7 @@ function takeToken($code, &$pos) {
     // lexer in one regex
     while($pos < strlen($code)) {
         if ($t=takeRegex(
-            '^(([{}\[\]()<>"\'+\-*\/\%=$.,;])|(for|function|return|if|else)|(\d+)|(\w+))',
+            '^(([{}\[\]()<>"\'+\-*\/\%=$.,;])|(for|function|return|if|else|true|false|!=)|(\d+)|(\w+))',
             $code,
             $pos
         )) return $t;
@@ -51,7 +51,47 @@ function takeSurrounded($open, $code, &$pos) {
 
 
 function eval_expr($code, &$pos, &$vars, &$funcs) {
-    return eval_t2($code, $pos, $vars, $funcs);
+    return eval_t3($code, $pos, $vars, $funcs);
+};
+
+function eval_t3($code, &$pos, &$vars, &$funcs){
+    $l = eval_t2($code, $pos, $vars, $funcs);
+
+    while ($c = takeToken($code, $pos)) {
+        if ($c == '<') {
+            $c = seekToken($code, $pos);
+            if ($c == '=') {
+                $pos++;
+                $r = eval_t2($code, $pos, $vars, $funcs);
+                return $l <= $r;
+            }
+            $r = eval_t2($code, $pos, $vars, $funcs);
+            return $l < $r;
+        } else if ($c == '>') {
+            $c = seekToken($code, $pos);
+            if ($c == '=') {
+                $pos++;
+                $r = eval_t2($code, $pos, $vars, $funcs);
+                return $l >= $r;
+            }
+            $r = eval_t2($code, $pos, $vars, $funcs);
+            return $l > $r;
+        } else if ($c == '=') {
+            $c = seekToken($code, $pos);
+            if ($c == '=') {
+                $pos++;
+                $r = eval_t2($code, $pos, $vars, $funcs);
+                return $l == $r;
+            }
+        } else if ($c == '!=') {
+            $r = eval_t2($code, $pos, $vars, $funcs);
+            return $l == $r;
+        } else {
+            $pos--;
+            return $l;
+        }
+    }
+    return $l;
 };
 
 function eval_t2($code, &$pos, &$vars, &$funcs){
@@ -172,7 +212,11 @@ function eval_atom($code, &$pos, &$vars, &$funcs) {
 
     if (array_key_exists($t, $funcs)) {
         return eval_call($funcs[$t], $code, $pos, $vars, $funcs);
-    } else {
+    } else if ($t === "true"){
+        return true;
+    } else if ($t === "false"){
+        return false;
+    }else {
         return $t;
     }
 }
@@ -211,6 +255,30 @@ function eval_def($code, &$pos, &$vars, &$funcs) {
     $funcs[$name] = [$args, $body];
 }
 
+function eval_if($conds, $thens, &$vars, &$funcs) {
+    $i = 0;
+    foreach($conds as $cond) {
+        $ePos = 0;
+        $e = eval_expr($cond.';', $ePos, $vars, $funcs);
+
+        var_dump($e, $cond, __LINE__);
+        if ($e) {
+            $ePos = 0;
+            return evaluate($thens[$i], $ePos, $vars, $funcs);
+        }
+        $i++;
+    }
+
+    // eval else
+    if (isset($thens[$i])) {
+        $ePos=0;
+        $e= evaluate($thens[$i], $ePos, $vars, $funcs);
+        var_dump("eval else",$thens[$i],$e, __LINE__);
+        return $e;
+    }
+    return;
+}
+
 function evaluate($code, &$pos, &$vars, &$funcs) {
     while($t = takeToken($code, $pos)) {
         // assign
@@ -231,7 +299,19 @@ function evaluate($code, &$pos, &$vars, &$funcs) {
             $expPos  = 0;
             return eval_expr($exp, $expPos, $vars, $funcs);
         } else if ($t == 'if') {
-            var_dump('if');
+            $conds = $thens = [];
+            $conds[] = takeSurrounded('(', $code, $pos);
+            $thens[] = takeSurrounded('{', $code, $pos);
+            while(takeRegex("(elseif)", $code, $pos)) {
+                $conds[] = takeSurrounded('(', $code, $pos);
+                $thens[] = takeSurrounded('{', $code, $pos);
+            }
+            if ('else' == seekToken($code, $pos)) {
+                $pos += 4;
+                $thens[] = takeSurrounded('{', $code, $pos);
+            }
+            var_dump($conds, $thens, __LINE__);
+            return eval_if($conds, $thens, $vars, $funcs);
         } else if ($t == 'for') {
             var_dump('for');
         }
